@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>d3-graphviz-to-gif</title>
+    <script src="gif.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@1.14.1/dist/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7.4.4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-graphviz@4.1.1"></script>
+</head>
+<body>
+<div id="app"></div>
+<script>
+    let params = JSON.parse(decodeURIComponent(window.location.search.slice(1)) || '{}')
+    params = {
+        delay: 300,
+        duration: 500,
+        fps: 20,
+        dots: ['digraph { }'],
+        ...params
+    }
+    const { delay, duration, fps, dots } = params
+
+    const app = document.querySelector('#app')
+
+    const xmlSerializer = new XMLSerializer()
+    const frames = []
+    function startRecord() {
+        return setInterval(() => {
+            const svg = xmlSerializer.serializeToString(app.children[0])
+            const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
+            const img = new Image()
+            img.src = url
+            img.onload = () => frames.push(img)
+        }, 1000 / fps)
+    }
+
+    function renderGIF() {
+        const width = Math.max(...frames.map(img => img.width)) - 1
+        const height = Math.max(...frames.map(img => img.height)) - 1
+        const gif = new GIF({
+            width, height,
+            quality: 10,
+        })
+        frames.forEach(img => gif.addFrame(img, { delay: 1000 / fps }))
+        gif.on('finished', (blob) => {
+            const img = new Image()
+            img.id = 'gif'
+            img.src = URL.createObjectURL(blob)
+            document.body.append(img)
+        })
+        gif.render()
+    }
+
+    ;(async () => {
+        const graphviz = d3.select(app).graphviz()
+        await new Promise(res => graphviz.on('initEnd', res))
+        const render = (dot) => new Promise(res => graphviz.renderDot(dot).on('end', res))
+        const startTransition = () => graphviz.transition(() =>
+            d3.transition().ease(d3.easeLinear).delay(delay).duration(duration))
+
+        await render(dots.splice(0, 1)[0])
+        startTransition()
+        const id = startRecord()
+        for(const dot of dots) {
+            await render(dot)
+        }
+        await new Promise(res => setTimeout(res, duration))
+        clearInterval(id)
+        renderGIF()
+    })()
+</script>
+</body>
+</html>
