@@ -43,6 +43,7 @@
         const gif = new GIF({
             width, height,
             quality: 10,
+            background: '#FFFFFF'
         })
         frames.forEach(img => gif.addFrame(img, { delay: 1000 / fps }))
         gif.on('finished', (blob) => {
